@@ -2,24 +2,32 @@
 #include <omp.h>
 
 int main() {
-    long n = 1000000;
+    int threads;
+    long n;
+
+    printf("Enter number of threads: ");
+    scanf("%d", &threads);
+
+    printf("Enter data size (number of intervals): ");
+    scanf("%ld", &n);
+
     double step = 1.0 / (double)n;
     double sum = 0.0, pi = 0.0;
 
+    omp_set_num_threads(threads);
     double start = omp_get_wtime();
 
     #pragma omp parallel for reduction(+:sum)
-    for (int i = 0; i < n; i++) {
+    for (long i = 0; i < n; i++) {
         double x = (i + 0.5) * step;
         sum += 4.0 / (1.0 + x * x);
     }
 
     pi = sum * step;
-
     double end = omp_get_wtime();
 
-    printf("Calculated Pi = %.15f\n", pi);
-    printf("Time taken = %f seconds\n", end - start);
+    printf("Threads\tDataSize\tPi Value\tTime(s)\n");
+    printf("%d\t%ld\t%.15f\t%f\n", threads, n, pi, end - start);
 
     return 0;
 }
