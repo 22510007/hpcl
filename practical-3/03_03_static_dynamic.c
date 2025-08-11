@@ -1,54 +1,74 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include <omp.h>
 
-#define SIZE 200
-#define SCALAR 5
-
 int main() {
-    int vector[SIZE];
+    int threads = 5;        
+    float scalar = 2.5;     
 
-    for (int i = 0; i < SIZE; i++)
-        vector[i] = i;
+    int sizes[]  = {200, 500, 1000, 5000};   
+    int chunks[] = {1, 5, 10, 20};            
+    int numSizes  = sizeof(sizes) / sizeof(sizes[0]);
+    int numChunks = sizeof(chunks) / sizeof(chunks[0]);
 
-    int chunks[] = {1, 5, 10, 20};
+    srand(time(NULL));
 
-    for (int c = 0; c < 4; c++) {
-        int chunk = chunks[c];
+    for (int s = 0; s < numSizes; s++) {
+        int size = sizes[s];
+        float *vector = (float *)malloc(size * sizeof(float));
+        float *result = (float *)malloc(size * sizeof(float));
 
-        double start_static = omp_get_wtime();
-        #pragma omp parallel for schedule(static, chunk)
-        for (int i = 0; i < SIZE; i++) {
-            vector[i] = i + SCALAR;
+        for (int i = 0; i < size; i++) {
+            vector[i] = (float)(rand() % 100);
         }
-        double end_static = omp_get_wtime();
-        printf("STATIC chunk=%d: Time = %f sec\n", chunk, end_static - start_static);
 
-        double start_dynamic = omp_get_wtime();
-        #pragma omp parallel for schedule(dynamic, chunk)
-        for (int i = 0; i < SIZE; i++) {
-            vector[i] = i + SCALAR;
+        printf("\n----------- Vector size: %d -----------\n", size);
+
+        double start_seq = omp_get_wtime();
+        for (int i = 0; i < size; i++) {
+            result[i] = vector[i] + scalar;
         }
-        double end_dynamic = omp_get_wtime();
-        printf("DYNAMIC chunk=%d: Time = %f sec\n", chunk, end_dynamic - start_dynamic);
-    }
+        double end_seq = omp_get_wtime();
+        double seq_time = end_seq - start_seq;
 
-    int A[SIZE], B[SIZE];
-    for (int i = 0; i < SIZE; i++) {
-        A[i] = i;
-        B[i] = i * 2;
-    }
+        printf("Sequential Time: %f sec\n", seq_time);
 
-    double start_nowait = omp_get_wtime();
-    #pragma omp parallel
-    {
-        #pragma omp for nowait
-        for (int i = 0; i < SIZE; i++) A[i] += SCALAR;
+        for (int c = 0; c < numChunks; c++) {
+            int chunk = chunks[c];
 
-        #pragma omp for
-        for (int i = 0; i < SIZE; i++) B[i] += SCALAR;
+            double start = omp_get_wtime();
+            #pragma omp parallel num_threads(threads)
+            {
+                #pragma omp for schedule(static, chunk) nowait
+                for (int i = 0; i < size; i++) {
+                    result[i] = vector[i] + scalar;
+                }
+            }
+            double end = omp_get_wtime();
+            double static_time = end - start;
+            double static_speedup = seq_time / static_time;
+            printf("STATIC  | Chunk: %4d | Time: %f sec | Speedup: %.2f\n",
+                   chunk, static_time, static_speedup);
+
+            start = omp_get_wtime();
+            #pragma omp parallel num_threads(threads)
+            {
+                #pragma omp for schedule(dynamic, chunk) nowait
+                for (int i = 0; i < size; i++) {
+                    result[i] = vector[i] + scalar;
+                }
+            }
+            end = omp_get_wtime();
+            double dynamic_time = end - start;
+            double dynamic_speedup = seq_time / dynamic_time;
+            printf("DYNAMIC | Chunk: %4d | Time: %f sec | Speedup: %.2f\n",
+                   chunk, dynamic_time, dynamic_speedup);
+        }
+
+        free(vector);
+        free(result);
     }
-    double end_nowait = omp_get_wtime();
-    printf("nowait: Time = %f sec\n", end_nowait - start_nowait);
 
     return 0;
 }
